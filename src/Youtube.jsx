@@ -21,7 +21,6 @@ const DocumentViewer = () => {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
   const [replaceTerm, setReplaceTerm] = useState('');
   const [showToc, setShowToc] = useState(false);
   const [fontSize, setFontSize] = useState(16);
@@ -31,6 +30,33 @@ const DocumentViewer = () => {
   const [editedPages, setEditedPages] = useState([...document.pages]);
 
   const [loading, setLoading] = useState(false); // For loading state
+  const [autoSave, setAutoSave] = useState(false); // Auto-save feature
+  const [darkMode, setDarkMode] = useState(false); // Dark mode toggle
+  const [bookmarkedPages, setBookmarkedPages] = useState([]); // Bookmarked pages
+  const [zoom, setZoom] = useState(100); // Zoom functionality
+
+  // Auto-save the document every 5 seconds if enabled
+  useEffect(() => {
+    if (autoSave) {
+      const interval = setInterval(() => {
+        saveDocument();
+      }, 5000); // Save every 5 seconds
+      return () => clearInterval(interval);
+    }
+  }, [autoSave]);
+
+  // Search functionality
+  useEffect(() => {
+    if (searchTerm) {
+      const results = document.pages.map((page, index) => {
+        if (page.toLowerCase().includes(searchTerm.toLowerCase())) {
+          return index + 1;
+        }
+        return null;
+      }).filter(page => page !== null);
+      setHighlightedText(results.join(', '));
+    }
+  }, [searchTerm, document.pages]);
 
   // Handle file upload
   const handleFileUpload = (event) => {
@@ -66,28 +92,13 @@ const DocumentViewer = () => {
 
       setCurrentPage(1);
       setSearchTerm('');
-      setSearchResults([]);
+      setHighlightedText('');
       setLoading(false);
       setEditedPages(pages); // Initialize edited pages with document pages
     };
 
     reader.readAsText(file);
   };
-
-  // Handle search functionality
-  useEffect(() => {
-    if (searchTerm) {
-      const results = document.pages.map((page, index) => {
-        if (page.toLowerCase().includes(searchTerm.toLowerCase())) {
-          return index + 1;
-        }
-        return null;
-      }).filter(page => page !== null);
-      setSearchResults(results);
-    } else {
-      setSearchResults([]);
-    }
-  }, [searchTerm, document.pages]);
 
   // Handle page change
   const handlePageChange = (newPage) => {
@@ -155,12 +166,41 @@ const DocumentViewer = () => {
     setReplaceTerm(''); // Clear replace term
   };
 
+  // Toggle Dark Mode
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+  };
+
+  // Bookmark Page
+  const toggleBookmarkPage = (page) => {
+    setBookmarkedPages(prev => 
+      prev.includes(page) ? prev.filter(b => b !== page) : [...prev, page]
+    );
+  };
+
+  // Zoom in/out functionality
+  const zoomIn = () => {
+    setZoom(prevZoom => Math.min(prevZoom + 10, 200));
+  };
+
+  const zoomOut = () => {
+    setZoom(prevZoom => Math.max(prevZoom - 10, 50));
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-lavender-100 to-peach-100 flex justify-center items-center p-6">
-      <div className="relative max-w-4xl w-full bg-white rounded-2xl shadow-lg p-8 border border-gray-200">
+    <div className={`min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-lavender-100 to-peach-100'} flex justify-center items-center p-6`}>
+      <div className="relative max-w-4xl w-full bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 border border-gray-200">
         
         {/* Document title */}
-        <h1 className="text-3xl font-semibold text-center text-gray-800 mb-8">{document.title || 'No Document Loaded'}</h1>
+        <h1 className="text-3xl font-semibold text-center text-gray-800 dark:text-white mb-8">{document.title || 'No Document Loaded'}</h1>
+
+        {/* Dark Mode Toggle */}
+        <button 
+          onClick={toggleDarkMode}
+          className="absolute top-4 right-4 p-2 bg-gray-600 text-white rounded-full shadow-md hover:bg-gray-500 transition duration-300 ease-in-out"
+        >
+          {darkMode ? 'Light Mode' : 'Dark Mode'}
+        </button>
 
         {/* File upload */}
         <div className="mb-8">
@@ -191,6 +231,16 @@ const DocumentViewer = () => {
           </button>
         </div>
 
+        {/* Zoom Controls */}
+        <div className="mb-4">
+          <button onClick={zoomOut} className="px-4 py-2 bg-gray-300 text-gray-800 rounded-full shadow-md hover:bg-gray-400 transition duration-300 ease-in-out">
+            Zoom Out
+          </button>
+          <button onClick={zoomIn} className="ml-4 px-4 py-2 bg-gray-300 text-gray-800 rounded-full shadow-md hover:bg-gray-400 transition duration-300 ease-in-out">
+            Zoom In
+          </button>
+        </div>
+
         {/* Search input */}
         <input
           type="text"
@@ -217,48 +267,11 @@ const DocumentViewer = () => {
           </button>
         </div>
 
-        {/* Font Size Selector */}
+        {/* Bookmarks */}
         <div className="mb-4">
-          <label className="text-gray-800 font-semibold">Font Size:</label>
-          <select
-            value={fontSize}
-            onChange={(e) => setFontSize(Number(e.target.value))}
-            className="ml-2 px-3 py-2 border border-gray-300 rounded-full"
-          >
-            <option value={14}>14px</option>
-            <option value={16}>16px</option>
-            <option value={18}>18px</option>
-            <option value={20}>20px</option>
-            <option value={24}>24px</option>
-            <option value={28}>28px</option>
-          </select>
+          <span className="text-gray-800 font-semibold">Bookmarks: </span>
+          <span className="text-gray-600">{bookmarkedPages.join(', ')}</span>
         </div>
-
-        {/* Undo/Redo Buttons */}
-        <div className="flex space-x-4 mb-6">
-          <button
-            onClick={undoEdit}
-            className="px-6 py-3 bg-blue-500 text-white rounded-full shadow-md hover:bg-blue-600 disabled:opacity-50"
-            disabled={undoStack.length === 0}
-          >
-            Undo
-          </button>
-          <button
-            onClick={redoEdit}
-            className="px-6 py-3 bg-blue-500 text-white rounded-full shadow-md hover:bg-blue-600 disabled:opacity-50"
-            disabled={redoStack.length === 0}
-          >
-            Redo
-          </button>
-        </div>
-
-        {/* Save Document */}
-        <button
-          onClick={saveDocument}
-          className="w-full px-6 py-3 bg-green-600 text-white rounded-full shadow-md hover:bg-green-700 transition duration-300 ease-in-out mb-6"
-        >
-          Save Document
-        </button>
 
         {/* Page content */}
         <div className="mb-8">
@@ -266,7 +279,7 @@ const DocumentViewer = () => {
           <div
             contentEditable
             onInput={(e) => handleEditContent(e, currentPage - 1)}
-            style={{ fontSize: `${fontSize}px` }}
+            style={{ fontSize: `${fontSize}px`, zoom: `${zoom}%` }}
             className="w-full min-h-[200px] p-6 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
           >
             {editedPages[currentPage - 1]}
